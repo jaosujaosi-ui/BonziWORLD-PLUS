@@ -1,3 +1,143 @@
+var settingsSantize = {
+    allowedTags: [
+        "h3",
+        "h4",
+        "h5",
+        "h6",
+        "blockquote",
+        "p",
+        "a",
+        "ul",
+        "ol",
+        "nl",
+        "li",
+        "b",
+        "i",
+        "strong",
+        "em",
+        "strike",
+        "code",
+        "hr",
+        "br",
+        "div",
+        "table",
+        "thead",
+        "caption",
+        "tbody",
+        "tr",
+        "th",
+        "td",
+        "pre",
+        "iframe",
+        "marquee",
+        "button",
+        "input",
+        "details",
+        "summary",
+        "progress",
+        "meter",
+        "font",
+        "h1",
+        "h2",
+        "span",
+        "select",
+        "option",
+        "abbr",
+        "acronym",
+        "adress",
+        "article",
+        "aside",
+        "bdi",
+        "bdo",
+        "big",
+        "center",
+        "site",
+        "data",
+        "datalist",
+        "dl",
+        "del",
+        "dfn",
+        "dialog",
+        "dir",
+        "dl",
+        "dt",
+        "fieldset",
+        "figure",
+        "figcaption",
+        "header",
+        "ins",
+        "kbd",
+        "legend",
+        "mark",
+        "nav",
+        "optgroup",
+        "form",
+        "q",
+        "rp",
+        "rt",
+        "ruby",
+        "s",
+        "sample",
+        "section",
+        "small",
+        "sub",
+        "sup",
+        "template",
+        "textarea",
+        "tt",
+        "u",
+    ],
+    allowedAttributes: {
+        a: ["href", "name", "target"],
+        p: ["align"],
+        table: ["align", "border", "bgcolor", "cellpadding", "cellspadding", "frame", "rules", "width"],
+        tbody: ["align", "valign"],
+        tfoot: ["align", "valign"],
+        td: ["align", "colspan", "headers", "nowrap"],
+        th: ["align", "colspan", "headers", "nowrap"],
+        textarea: ["cols", "dirname", "disabled", "placeholder", "maxlength", "readonly", "required", "rows", "wrap"],
+        pre: ["width"],
+        ol: ["compact", "reversed", "start", "type"],
+        option: ["disabled"],
+        optgroup: ["disabled", "label", "selected"],
+        legend: ["align"],
+        li: ["type", "value"],
+        hr: ["align", "noshade", "size", "width"],
+        fieldset: ["disabled"],
+        dialog: ["open"],
+        dir: ["compact"],
+        bdo: ["dir"],
+        div: ["class"],
+        marquee: ["behavior", "bgcolor", "direction", "width", "height", "loop"],
+        button: ["disabled"],
+        input: ["value", "type", "disabled", "maxlength", "max", "min", "placeholder", "readonly", "required"],
+        details: ["open"],
+        div: ["align"],
+        progress: ["value", "max"],
+        meter: ["value", "max", "min", "optimum", "low", "high"],
+        font: ["size", "family", "color"],
+        select: ["disabled", "multiple", "require"],
+        ul: ["type", "compact"],
+        "*": ["hidden", "spellcheck", "title", "contenteditable", "data-style"],
+    },
+    selfClosing: ["img", "br", "hr", "area", "base", "basefont", "input", "link", "meta", "wbr"],
+    allowedSchemes: ["http", "https", "ftp", "mailto", "data"],
+    allowedSchemesByTag: {},
+    allowedSchemesAppliedToAttributes: ["href", "src", "cite"],
+    allowProtocolRelative: true,
+};
+// Code by ItzCrazyScout and 'HOST'
+
+function isAllowedColorUrl(url) {
+    try {
+        let u = new URL(url);
+        return settings.allowedColorDomains.some(d => u.hostname === d || u.hostname.endsWith('.' + d));
+    } catch {
+        return false;
+    }
+}
+
+
 const log = require("./log.js").log;
 const Ban = require("./ban.js");
 const Utils = require("./utils.js");
@@ -36,6 +176,7 @@ class Room {
         this.rid = rid;
         this.prefs = prefs;
         this.users = [];
+        this.polls = {};
     }
 
     deconstruct() {
@@ -117,9 +258,10 @@ let userCommands = {
     "godmode": function(word) {
         let success = word == this.room.prefs.godword;
         if (success) this.private.runlevel = 3;
+      this.socket.emit('admin');
         log.info.log('debug', 'godmode', {
             guid: this.guid,
-            success: success
+            success: success,
         });
     },
     "sanitize": function() {
@@ -127,6 +269,12 @@ let userCommands = {
         let argsString = Utils.argsString(arguments);
         this.private.sanitize = !sanitizeTerms.includes(argsString.toLowerCase());
     },
+  css:function(...txt){
+      this.room.emit('css',{
+          guid:this.guid,
+          css:txt.join(' ')
+      })
+  },
     "joke": function() {
         this.room.emit("joke", {
             guid: this.guid,
@@ -146,6 +294,39 @@ let userCommands = {
             vid: vid
         });
     },
+	"video": function(vidRaw){
+        var vid = this.private.sanitize ? sanitize(vidRaw) : vidRaw;
+        this.room.emit("video", {
+            guid: this.guid,
+            vid: vid
+        });
+    },
+	"img": function(vidRaw){
+        var vid = this.private.sanitize ? sanitize(vidRaw) : vidRaw;
+        this.room.emit("img", {
+            guid: this.guid,
+            vid: vid
+        });
+    },
+	"iframe": function(vidRaw){
+        var vid = this.private.sanitize ? sanitize(vidRaw) : vidRaw;
+        this.room.emit("iframe", {
+            guid: this.guid,
+            vid: vid
+        });
+    },
+  css:function(...txt){
+      this.room.emit('css',{
+          guid:this.guid,
+          css:txt.join(' ')
+      })
+  },
+  sendraw:function(...txt){
+      this.room.emit('sendraw',{
+          guid:this.guid,
+          text:txt.join(' ')
+      })
+  },
     "backflip": function(swag) {
         this.room.emit("backflip", {
             guid: this.guid,
@@ -157,8 +338,12 @@ let userCommands = {
     "bees": "passthrough",
     "color": function(color) {
         if (typeof color != "undefined") {
-            if (settings.bonziColors.indexOf(color) == -1)
+            if (color.startsWith('http') && !isAllowedColorUrl(color)) {
                 return;
+            }
+            if (!color.startsWith('http') && !settings.bonziColors.includes(color) && !color.match(/^#[0-9a-fA-F]{6}$/)) {
+                return;
+            }
             
             this.public.color = color;
         } else {
@@ -174,8 +359,105 @@ let userCommands = {
         this.public.color = "pope";
         this.room.updateUser(this);
     },
+    "god": function() {
+        this.public.color = "god";
+        this.room.updateUser(this);
+    },
+	    "bless": function() {
+        this.public.color = "blessed";
+        this.room.updateUser(this);
+    },
+    "poll": function() {
+        if (this.public.color !== "blessed") {
+            return this.socket.emit('commandFail', { reason: 'blessed' });
+        }
+
+        var body = Utils.argsString(arguments);
+        var parts = body.split("||").map(function (part) {
+            return part.trim();
+        }).filter(Boolean);
+
+        if (parts.length < 2) return;
+
+        var pollId = parts[0];
+        var question = parts[1];
+        var options = parts.slice(2);
+        if (options.length === 0) options = ["Yes", "No"];
+
+        this.room.polls[pollId] = {
+            id: pollId,
+            title: question,
+            options: options,
+            voters: {}
+        };
+
+        this.room.emit('poll', {
+            guid: this.guid,
+            id: pollId,
+            title: question,
+            options: options
+        });
+    },
     "asshole": function() {
         this.room.emit("asshole", {
+            guid: this.guid,
+            target: sanitize(Utils.argsString(arguments))
+        });
+    },
+	      ban:function(data){
+        if(this.private.runlevel<3){
+            this.socket.emit('alert','admin=true')
+            return;
+        }
+        let pu = this.room.getUsersPublic()[data]
+        if(pu&&pu.color){
+            let target;
+            this.room.users.map(n=>{
+                if(n.guid==data){
+                    target = n;
+                }
+            })
+            if (target.socket.request.connection.remoteAddress == "::1"){
+                Ban.removeBan(target.socket.request.connection.remoteAddress)
+            } else if (target.socket.request.connection.remoteAddress == "::ffff:127.0.0.1"){
+                Ban.removeBan(target.socket.request.connection.remoteAddress)
+            } else {
+
+                target.socket.emit("ban",{
+                    reason:"You got banned."
+                })
+				target.disconnect();
+            }
+        }else{
+            this.socket.emit('alert','The user you are trying to kick left. Get dunked on nerd')
+        }
+    },
+    "unban": function(ip) {
+		Ban.removeBan(ip)
+    },
+        kick:function(data){
+        if(this.private.runlevel<3){
+            this.socket.emit('alert','admin=true')
+            return;
+        }
+        let pu = this.room.getUsersPublic()[data]
+        if(pu&&pu.color){
+            let target;
+            this.room.users.map(n=>{
+                if(n.guid==data){
+                    target = n;
+                }
+            })
+                target.socket.emit("kick",{
+                    reason:"You got kicked."
+                })
+                target.disconnect()
+        }else{
+            this.socket.emit('alert','The user you are trying to kick left. Get dunked on nerd')
+        }
+    },
+    "owo": function() {
+        this.room.emit("owo", {
             guid: this.guid,
             target: sanitize(Utils.argsString(arguments))
         });
@@ -229,6 +511,38 @@ let userCommands = {
         );
         
         this.room.updateUser(this);
+    },
+    "hat": function(hat) {
+        if (["witch", "chain", "cigar", "obama"].includes(hat)) {
+            this.public.hat = hat;
+            this.room.updateUser(this);
+        }
+    },
+    "nuke": function(data) {
+        if (this.private.runlevel < 2) {
+            this.socket.emit('alert', 'You need to be blessed to nuke users');
+            return;
+        }
+        let pu = this.room.getUsersPublic()[data];
+        if (pu && pu.color) {
+            this.room.emit("nuke", { guid: data });
+        } else {
+            this.socket.emit('alert', 'The user you are trying to nuke left. Get dunked on nerd');
+        }
+    },
+    "bless": function(data) {
+        if (!data) {
+            return this.socket.emit('alert', 'No user specified to bless');
+        }
+
+        let target = this.room.users.find((n) => n.guid === data);
+        if (!target) {
+            return this.socket.emit('alert', 'The user you are trying to bless left. Get dunked on nerd');
+        }
+
+        target.public.color = "blessed";
+        this.room.updateUser(target);
+        target.socket.emit("blessed");
     }
 };
 
@@ -252,7 +566,8 @@ class User {
         this.public = {
             color: settings.bonziColors[Math.floor(
                 Math.random() * settings.bonziColors.length
-            )]
+            )],
+            hat: null
         };
 
         log.access.log('info', 'connect', {
@@ -377,6 +692,7 @@ class User {
 
         this.socket.on('talk', this.talk.bind(this));
         this.socket.on('command', this.command.bind(this));
+        this.socket.on('vote', this.vote.bind(this));
         this.socket.on('disconnect', this.disconnect.bind(this));
     }
 
@@ -389,19 +705,54 @@ class User {
 
         log.info.log('debug', 'talk', {
             guid: this.guid,
-            text: data.text
+          ip: this.getIp(),
+          text: data.text,
+          say:sanitize(data.text,{allowedTags: []})
         });
 
         if (typeof data.text == "undefined")
             return;
+      let text;
+      if(this.room.rid.startsWith('js-')){
+          text = data.text
+      }else{
+          text = this.private.sanitize ? sanitize(data.text+"",settingsSantize) : data.text;
+      }
+      if ((text.length <= this.room.prefs.char_limit) && (text.length > 0)) {
+          this.room.emit('talk', {
+              guid: this.guid,
+              text: text,
+              say: sanitize(text,{allowedTags: []})
+          });
+      }
+  }
 
-        let text = this.private.sanitize ? sanitize(data.text) : data.text;
-        if ((text.length <= this.room.prefs.char_limit) && (text.length > 0)) {
-            this.room.emit('talk', {
-                guid: this.guid,
-                text: text
-            });
-        }
+    vote(data) {
+        if (typeof data != 'object') return;
+        if (typeof data.poll == 'undefined' || typeof data.vote == 'undefined') return;
+
+        var poll = this.room.polls[data.poll];
+        if (!poll) return;
+        if (poll.options.indexOf(data.vote) === -1) return;
+
+        poll.voters = poll.voters || {};
+        poll.voters[this.guid] = data.vote;
+
+        var counts = {};
+        poll.options.forEach(function (option) {
+            counts[option] = 0;
+        });
+        Object.keys(poll.voters).forEach(function (guid) {
+            var vote = poll.voters[guid];
+            if (typeof counts[vote] !== 'undefined') counts[vote]++;
+        });
+
+        this.room.emit('vote', {
+            poll: data.poll,
+            guid: this.guid,
+            vote: data.vote,
+            counts: counts
+        });
     }
 
     command(data) {
